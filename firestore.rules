@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- User Rules ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt']) &&
+             data.uid == request.auth.uid &&
+             data.email == request.auth.token.email &&
+             data.createdAt == request.time &&
+             (data.get('goals', []) is list) &&
+             (data.get('dietaryPreferences', []) is list);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'goals', 'dietaryPreferences', 'updatedAt']) &&
+        incoming().updatedAt == request.time
+      );
+    }
+
+    // --- Meal Rules ---
+    function isValidMeal(data) {
+      return data.keys().hasAll(['userId', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.timestamp == request.time &&
+             (data.get('description', '') is string) &&
+             (data.get('calories', 0) is number) &&
+             (data.get('healthScore', 0) is number);
+    }
+
+    match /meals/{mealId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isOwner(resource.data.userId);
+      allow create: if isSignedIn() && isValidMeal(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+
+    // --- Habit Rules ---
+    function isValidHabit(data) {
+      return data.keys().hasAll(['userId', 'title', 'frequency', 'active', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.title is string && data.title.size() <= 100 &&
+             data.frequency in ['daily', 'weekly'] &&
+             data.active is bool &&
+             data.createdAt == request.time;
+    }
+
+    match /habits/{habitId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isOwner(resource.data.userId);
+      allow create: if isSignedIn() && isValidHabit(incoming());
+      allow update: if isOwner(existing().userId) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'active', 'frequency'])
+      );
+      allow delete: if isOwner(existing().userId);
+    }
+
+    // --- HabitLog Rules ---
+    function isValidHabitLog(data) {
+      return data.keys().hasAll(['userId', 'habitId', 'date', 'completed', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.habitId is string &&
+             data.date is string &&
+             data.completed is bool &&
+             data.timestamp == request.time;
+    }
+
+    match /habitLogs/{logId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isOwner(resource.data.userId);
+      allow create: if isSignedIn() && isValidHabitLog(incoming());
+      allow update: if isOwner(existing().userId) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'timestamp']) &&
+        incoming().timestamp == request.time
+      );
+      allow delete: if isOwner(existing().userId);
+    }
+  }
+}
