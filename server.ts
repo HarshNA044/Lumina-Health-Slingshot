@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json({ limit: '10mb' }));
 
@@ -26,8 +26,7 @@ async function startServer() {
         return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server." });
       }
 
-      const ai = new GoogleGenAI(apiKey);
-      const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
+      const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `Analyze this meal based on the description${imageUrl ? ' and image' : ''}. 
       Description: "${description}"
@@ -40,11 +39,12 @@ async function startServer() {
           { text: prompt },
           { inlineData: { mimeType: "image/jpeg", data: imageUrl.split(',')[1] } }
         ]
-      } : [{ text: prompt }];
+      } : prompt;
 
-      const result = await model.generateContent({
-        contents: [contents] as any,
-        generationConfig: {
+      const result = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents,
+        config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -67,7 +67,7 @@ async function startServer() {
         }
       });
 
-      res.json(JSON.parse(result.response.text()));
+      res.json(JSON.parse(result.text || "{}"));
     } catch (error: any) {
       console.error("Gemini API Error:", error);
       res.status(500).json({ error: error.message });
@@ -83,19 +83,22 @@ async function startServer() {
         return res.status(500).json({ error: "GEMINI_API_KEY is not configured on the server." });
       }
 
-      const ai = new GoogleGenAI(apiKey);
-      const model = ai.getGenerativeModel({ 
-        model: "gemini-3-flash-preview",
-        systemInstruction: "You are Lumina, a supportive and intelligent nutritional companion with deep expertise in Indian diets and global nutrition. Keep insights concise, culturally relevant, and encouraging."
-      });
+      const ai = new GoogleGenAI({ apiKey });
       
       const prompt = `Based on the following meal history, tracked habits, and weight logs, provide 3 punchy, actionable health insights or tips for this user.
       Meals (recent): ${JSON.stringify(meals.slice(0, 5))}
       Habits: ${JSON.stringify(habits)}
       Weight Logs (recent): ${JSON.stringify(weightLogs)}`;
 
-      const result = await model.generateContent(prompt);
-      res.json({ text: result.response.text() });
+      const result = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: {
+          systemInstruction: "You are Lumina, a supportive and intelligent nutritional companion with deep expertise in Indian diets and global nutrition. Keep insights concise, culturally relevant, and encouraging."
+        }
+      });
+
+      res.json({ text: result.text });
     } catch (error: any) {
       console.error("Gemini API Error:", error);
       res.status(500).json({ error: error.message });
