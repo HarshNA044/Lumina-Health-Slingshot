@@ -3,6 +3,10 @@ export interface UserProfile {
   displayName: string;
   email: string;
   photoURL: string;
+  weight?: number;
+  height?: number;
+  points: number;
+  level: number;
   goals: string[];
   dietaryPreferences: string[];
   createdAt: string;
@@ -22,6 +26,8 @@ export interface MealLog {
   };
   healthScore: number;
   analysis: string;
+  mood?: 'Energetic' | 'Tired' | 'Stressed' | 'Happy' | 'Neutral';
+  location?: 'Home' | 'Office' | 'Restaurant' | 'On the go';
   timestamp: any;
 }
 
@@ -41,5 +47,22 @@ export interface HabitLog {
   habitId: string;
   date: string;
   completed: boolean;
+  timestamp: any;
+}
+
+export interface WeightLog {
+  id?: string;
+  userId: string;
+  weight: number;
+  unit: 'kg' | 'lbs';
+  date: string;
+  timestamp: any;
+}
+
+export interface WaterLog {
+  id?: string;
+  userId: string;
+  amount: number; // in glasses
+  date: string;
   timestamp: any;
 }

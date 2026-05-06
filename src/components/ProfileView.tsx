@@ -12,7 +12,8 @@ import {
   Camera, 
   ChevronRight,
   ShieldCheck,
-  Heart
+  Heart,
+  Star
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -76,6 +77,15 @@ export default function ProfileView({ user }: ProfileViewProps) {
         <div>
           <h1 className="font-display text-4xl italic">{user.displayName}</h1>
           <p className="text-ink/40 font-medium">{user.email}</p>
+        </div>
+        
+        <div className="flex gap-4">
+          <div className="px-4 py-2 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+            <Star size={14} /> {profile?.points || 0} Points
+          </div>
+          <div className="px-4 py-2 bg-accent/10 text-accent rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+            Level {profile?.level || 1}
+          </div>
         </div>
       </header>
 

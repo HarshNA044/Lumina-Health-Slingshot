@@ -41,7 +41,7 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUser(incoming());
       allow update: if isOwner(userId) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'goals', 'dietaryPreferences', 'updatedAt']) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'goals', 'dietaryPreferences', 'weight', 'height', 'points', 'updatedAt']) &&
         incoming().updatedAt == request.time
       );
     }
@@ -102,6 +102,40 @@ service cloud.firestore {
         incoming().timestamp == request.time
       );
       allow delete: if isOwner(existing().userId);
+    }
+
+    // --- WeightLog Rules ---
+    function isValidWeightLog(data) {
+      return data.keys().hasAll(['userId', 'weight', 'unit', 'date', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.weight is number && data.weight > 0 &&
+             data.unit in ['kg', 'lbs'] &&
+             data.date is string &&
+             data.timestamp == request.time;
+    }
+
+    match /weightLogs/{logId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isOwner(resource.data.userId);
+      allow create: if isSignedIn() && isValidWeightLog(incoming());
+      allow delete: if isOwner(existing().userId);
+    }
+    // --- WaterLog Rules ---
+    function isValidWaterLog(data) {
+      return data.keys().hasAll(['userId', 'amount', 'date', 'timestamp']) &&
+             data.userId == request.auth.uid &&
+             data.amount is number && data.amount > 0 &&
+             data.date is string &&
+             data.timestamp == request.time;
+    }
+
+    match /waterLogs/{logId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isSignedIn() && isValidWaterLog(incoming());
+      allow update: if isOwner(resource.data.userId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'timestamp']) &&
+        incoming().timestamp == request.time;
+      allow delete: if isOwner(resource.data.userId);
     }
   }
 }

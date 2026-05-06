@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { analyzeMeal, MealAnalysis } from '../lib/gemini';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,6 +16,8 @@ export default function MealLogger({ user }: MealLoggerProps) {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<MealAnalysis | null>(null);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [mood, setMood] = useState<any>('Neutral');
+  const [location, setLocation] = useState<any>('Home');
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -39,37 +41,43 @@ export default function MealLogger({ user }: MealLoggerProps) {
     try {
       const res = await analyzeMeal(description, image || undefined);
       setResult(res);
-      setAnalyzing(false);
-    } catch (error) {
-      console.error('Error analyzing meal:', error);
-      setStatus('error');
-      setAnalyzing(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!result) return;
-    try {
+      
+      // AUTO SAVE
       await addDoc(collection(db, 'meals'), {
         userId: user.uid,
         description: description || 'Visual meal log',
         imageUrl: image,
-        calories: result.calories,
-        macronutrients: result.macronutrients,
-        healthScore: result.healthScore,
-        analysis: result.analysis,
+        calories: res.calories,
+        macronutrients: res.macronutrients,
+        healthScore: res.healthScore,
+        analysis: res.analysis,
+        mood,
+        location,
         timestamp: serverTimestamp(),
       });
+
+      const pointsEarned = res.healthScore * 10;
+      const userRef = doc(db, 'users', user.uid);
+      await updateDoc(userRef, {
+        points: increment(pointsEarned),
+        updatedAt: serverTimestamp()
+      });
+
       setStatus('success');
-      // Reset after success
+      setAnalyzing(false);
+      
+      // Auto reset after some time
       setTimeout(() => {
         setResult(null);
         setDescription('');
         setImage(null);
         setStatus('idle');
-      }, 2000);
+      }, 5000); // 5 seconds to view results
+
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'meals');
+      console.error('Error analyzing meal:', error);
+      setStatus('error');
+      setAnalyzing(false);
     }
   };
 
@@ -91,9 +99,22 @@ export default function MealLogger({ user }: MealLoggerProps) {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g., Grilled salmon with quinoa and roasted asparagus..."
+                placeholder="e.g., 2 Rotis with Dal Tadka and a side of Paneer Sabzi..."
                 className="w-full bg-warm/50 border-none rounded-2xl p-4 min-h-[120px] focus:ring-2 focus:ring-primary/20 transition-all resize-none"
               />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {['Idli Sambhar', 'Chicken Biryani', 'Mixed Veg Curry', 'Poha'].map(item => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setDescription(item)}
+                  className="px-3 py-1 bg-warm rounded-full text-xs font-bold text-ink/40 hover:bg-primary/10 hover:text-primary transition-all border border-ink/5"
+                >
+                  + {item}
+                </button>
+              ))}
             </div>
 
             <div className="space-y-4">
@@ -122,6 +143,52 @@ export default function MealLogger({ user }: MealLoggerProps) {
                   </button>
                 </div>
               )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <label className="block text-sm font-bold uppercase tracking-wider text-ink/40">
+                  How do you feel?
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {['Energetic', 'Tired', 'Stressed', 'Happy', 'Neutral'].map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMood(m)}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all border ${
+                        mood === m 
+                          ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
+                          : 'bg-warm text-ink/40 border-ink/5 hover:border-primary/30'
+                      }`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="block text-sm font-bold uppercase tracking-wider text-ink/40">
+                  Where are you?
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {['Home', 'Office', 'Restaurant', 'On the go'].map(l => (
+                    <button
+                      key={l}
+                      type="button"
+                      onClick={() => setLocation(l)}
+                      className={`px-4 py-2 rounded-xl text-[10px] font-bold transition-all border ${
+                        location === l 
+                          ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
+                          : 'bg-warm text-ink/40 border-ink/5 hover:border-primary/30'
+                      }`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <button
@@ -190,25 +257,12 @@ export default function MealLogger({ user }: MealLoggerProps) {
                   </p>
                 </div>
 
-                <button
-                  onClick={handleSave}
-                  disabled={status === 'success'}
-                  className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 ${
-                    status === 'success' ? 'bg-green-500 text-white' : 'bg-ink text-white hover:opacity-90'
-                  }`}
+                <div
+                  className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-3 bg-emerald-500 text-white shadow-lg shadow-emerald-500/20`}
                 >
-                  {status === 'success' ? (
-                    <>
-                      <CheckCircle2 size={24} />
-                      Meal Saved
-                    </>
-                  ) : (
-                    <>
-                      <Send size={20} />
-                      Save to Food Log
-                    </>
-                  )}
-                </button>
+                  <CheckCircle2 size={24} />
+                  Meal Saved Successfully!
+                </div>
               </motion.div>
             ) : (
               <motion.div

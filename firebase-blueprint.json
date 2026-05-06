@@ -9,6 +9,10 @@
         "displayName": { "type": "string" },
         "email": { "type": "string" },
         "photoURL": { "type": "string" },
+        "weight": { "type": "number" },
+        "height": { "type": "number" },
+        "points": { "type": "number" },
+        "level": { "type": "number" },
         "goals": {
           "type": "array",
           "items": { "type": "string" }
@@ -41,6 +45,8 @@
         },
         "healthScore": { "type": "number" },
         "analysis": { "type": "string" },
+        "mood": { "type": "string", "enum": ["Energetic", "Tired", "Stressed", "Happy", "Neutral"] },
+        "location": { "type": "string", "enum": ["Home", "Office", "Restaurant", "On the go"] },
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "timestamp"]
@@ -71,6 +77,31 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "habitId", "date", "completed"]
+    },
+    "WeightLog": {
+      "title": "Weight Log",
+      "description": "A log of user's body weight",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "weight": { "type": "number" },
+        "unit": { "type": "string", "enum": ["kg", "lbs"] },
+        "date": { "type": "string", "format": "date" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "weight", "unit", "date", "timestamp"]
+    },
+    "WaterLog": {
+      "title": "Water Log",
+      "description": "Daily water intake record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number", "description": "Amount in glasses or ml" },
+        "date": { "type": "string", "format": "date" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "date", "timestamp"]
     }
   },
   "firestore": {
@@ -89,6 +120,14 @@
     "/habitLogs/{logId}": {
       "schema": "HabitLog",
       "description": "Log of habit completions"
+    },
+    "/weightLogs/{logId}": {
+      "schema": "WeightLog",
+      "description": "Log of weight measurements"
+    },
+    "/waterLogs/{logId}": {
+      "schema": "WaterLog",
+      "description": "Daily water tracking"
     }
   }
 }

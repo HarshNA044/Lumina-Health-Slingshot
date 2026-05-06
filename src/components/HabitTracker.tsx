@@ -107,22 +107,47 @@ export default function HabitTracker({ user }: HabitTrackerProps) {
 
       <AnimatePresence>
         {showAdd && (
-          <motion.form
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
-            onSubmit={handleAddHabit}
-            className="glass-card p-8 flex gap-4 overflow-hidden"
+            className="space-y-4 overflow-hidden"
           >
-            <input 
-              autoFocus
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Enter habit (e.g., Drink 2L water, Morning stretch...)"
-              className="flex-1 bg-warm/50 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none"
-            />
-            <button type="submit" className="btn-primary">Add Habit</button>
-          </motion.form>
+            <form
+              onSubmit={handleAddHabit}
+              className="glass-card p-8 flex gap-4"
+            >
+              <input 
+                autoFocus
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Enter habit (e.g., Drink 2L water, Morning stretch...)"
+                className="flex-1 bg-warm/50 rounded-2xl px-6 py-4 focus:ring-2 focus:ring-primary/20 outline-none"
+              />
+              <button type="submit" className="btn-primary">Add Habit</button>
+            </form>
+
+            <div className="flex flex-wrap gap-2 px-2">
+              {[
+                'Drink 2L Water', 
+                'Morning Yoga', 
+                'Evening Walk', 
+                'No Junk Food', 
+                'Warm Lemon Water', 
+                'Meditation'
+              ].map(item => (
+                <button
+                  key={item}
+                  onClick={() => {
+                    setNewTitle(item);
+                  }}
+                  className="px-4 py-2 bg-white rounded-xl text-xs font-bold text-ink/40 hover:bg-primary/10 hover:text-primary transition-all border border-ink/5"
+                >
+                  + {item}
+                </button>
+              ))}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 

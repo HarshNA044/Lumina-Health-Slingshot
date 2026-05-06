@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
@@ -15,50 +15,84 @@ import {
   User as UserIcon,
   LogOut,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Scale,
+  Droplets
 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import MealLogger from './components/MealLogger';
 import HabitTracker from './components/HabitTracker';
+import WeightTracker from './components/WeightTracker';
+import WaterTracker from './components/WaterTracker';
 import ProfileView from './components/ProfileView';
+import Onboarding from './components/Onboarding';
+import { UserProfile } from './types';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'habits' | 'profile'>('dashboard');
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'habits' | 'weight' | 'water' | 'profile'>('dashboard');
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Ensure user doc exists
-        const userRef = doc(db, 'users', user.uid);
-        const userSnap = await getDoc(userRef);
-        if (!userSnap.exists()) {
-          await setDoc(userRef, {
-            uid: user.uid,
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-            goals: [],
-            dietaryPreferences: [],
-            createdAt: serverTimestamp(),
-          });
+    let unsubscribeProfile: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (authUser) => {
+      if (authUser) {
+        setUser(authUser);
+        const userRef = doc(db, 'users', authUser.uid);
+        
+        try {
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, {
+              uid: authUser.uid,
+              displayName: authUser.displayName,
+              email: authUser.email,
+              photoURL: authUser.photoURL,
+              goals: [],
+              dietaryPreferences: [],
+              points: 0,
+              level: 1,
+              createdAt: serverTimestamp(),
+            });
+          }
+        } catch (error) {
+          console.error("Error ensuring user doc:", error);
         }
-        setUser(user);
+
+        unsubscribeProfile = onSnapshot(userRef, (snap) => {
+          if (snap.exists()) {
+            setProfile(snap.data() as UserProfile);
+          }
+          setLoading(false);
+        });
       } else {
         setUser(null);
+        setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   const handleSignIn = async () => {
+    if (isSigningIn) return;
+    setIsSigningIn(true);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error('Error signing in:', error);
+    } catch (error: any) {
+      if (error.code !== 'auth/cancelled-popup-request') {
+        console.error('Error signing in:', error);
+      }
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
@@ -100,10 +134,11 @@ export default function App() {
             </div>
             <button 
               onClick={handleSignIn}
-              className="w-full flex items-center justify-center gap-3 bg-primary text-white py-4 rounded-2xl font-bold hover:opacity-90 transition-all shadow-lg active:scale-[0.98]"
+              disabled={isSigningIn}
+              className="w-full flex items-center justify-center gap-3 bg-primary text-white py-4 rounded-2xl font-bold hover:opacity-90 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
             >
-              Sign in with Google
-              <ChevronRight size={20} />
+              {isSigningIn ? 'Opening Google...' : 'Sign in with Google'}
+              {!isSigningIn && <ChevronRight size={20} />}
             </button>
           </div>
         </motion.div>
@@ -113,18 +148,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-warm pb-24 md:pb-0 md:pl-20">
+      {profile && (!profile.weight || !profile.height) && (
+        <Onboarding user={profile} onComplete={() => {}} />
+      )}
       {/* Sidebar / Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-ink/5 z-50 md:top-0 md:bottom-0 md:right-auto md:w-20 md:border-t-0 md:border-r flex md:flex-col items-center justify-around md:justify-center gap-8 py-4 md:py-8">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-ink/5 z-50 md:top-0 md:bottom-0 md:right-auto md:w-20 md:border-t-0 md:border-r flex md:flex-col items-center justify-around md:justify-center gap-6 py-4 md:py-8 overflow-x-auto md:overflow-x-visible">
         {[
           { id: 'dashboard', icon: LayoutDashboard },
           { id: 'meals', icon: Utensils },
           { id: 'habits', icon: CheckCircle2 },
+          { id: 'water', icon: Droplets },
+          { id: 'weight', icon: Scale },
           { id: 'profile', icon: UserIcon },
         ].map(({ id, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id as any)}
-            className={`p-3 rounded-2xl transition-all ${
+            className={`p-3 rounded-2xl transition-all shrink-0 ${
               activeTab === id 
                 ? 'bg-primary text-white shadow-lg' 
                 : 'text-ink/40 hover:text-ink/60 hover:bg-ink/5'
@@ -151,9 +191,11 @@ export default function App() {
             exit={{ opacity: 0, x: -10 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'dashboard' && <Dashboard user={user} />}
+            {activeTab === 'dashboard' && <Dashboard user={user} profile={profile} />}
             {activeTab === 'meals' && <MealLogger user={user} />}
             {activeTab === 'habits' && <HabitTracker user={user} />}
+            {activeTab === 'water' && <WaterTracker user={user} />}
+            {activeTab === 'weight' && <WeightTracker user={user} />}
             {activeTab === 'profile' && <ProfileView user={user} />}
           </motion.div>
         </AnimatePresence>
